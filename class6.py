@@ -218,9 +218,17 @@ class Graph:
         """
         self.Nv = VertexNum #顶点数
         self.Ne = 0 #弧数
-        self.Glist = [[0 for i in range(VertexNum)] for i in range(VertexNum)]#邻间矩阵
+        self.Glist = [[65535 for i in range(VertexNum)] for i in range(VertexNum)]#邻间矩阵
         self.data = [] #存储顶点数据
         self.visited = [False for i in range(VertexNum)]
+        self.path = [-1 for i in range(VertexNum)]
+        self.dist = [65535 for i in range(VertexNum)]
+        self.collected = [False for i in range(self.Nv)]
+        self.D = self.Glist
+        self.Dpath = [[-1 for i in range(VertexNum)] for i in range(VertexNum)]
+        self.parent = [0 for i in range(VertexNum)]
+        self.MST = LGraph(self.Nv)
+
     def insertedge(self, edge):
 
         # 插入边<V1,V2>
@@ -247,7 +255,7 @@ class Graph:
 
     def BFS(self, vertex):
         """
-        首先访问初始点v,接着访问v的所有为被访问过的邻接点,然后按照顶点的次序访问每一个顶点的所有未被访问过的
+        首先访问初始点v,接着访问v的所有未被访问过的邻接点,然后按照顶点的次序访问每一个顶点的所有未被访问过的
         邻接点，此次类推，直到图中额所有和初始点v有路径相同的顶点都被访问过为止。
         """
         Q = Qnode(10)
@@ -262,6 +270,139 @@ class Graph:
                     self.visit(W)
                     self.visited[W] = True
                     Q.addq(W)
+
+    def floyd(self):
+        """
+        有权图的单源最短路算法:
+        有向图G(V,E)采用邻间矩阵存储，D二维数组存放当前顶点之间的最短路径长度
+        递归的产生一个矩阵序列，A0,A1...Ak...An,其中Ak[i][j]表示从顶点Vi到顶点Vj的路径上所经过
+        的顶点编号不大于k的最短路径长度。
+        """
+        self.D = self.Glist
+        for i in range(self.Nv):
+            for j in range(self.Nv):
+                for k in range(self.Nv):
+                    if self.D[i][k] + self.D[k][j] < self.D[i][j]:
+                        self.D[i][j] = self.D[i][k] + self.D[k][j]
+                        if i==j and self.D[i][j] < 0:
+                            return False
+                        self.Dpath[i][j] = k
+        return True
+
+
+
+    def findmindist(self):
+        """
+        从未收录collected的顶点中dist最小的值
+        """
+        Mindist = 65535
+        for V in range(self.Nv):
+            if not self.collected[V] and self.dist[V] < 65535:
+                Mindist = self.dist[V]
+                MinV = V
+        if Mindist < 65535:
+            return MinV
+        else:
+            return None
+
+
+    def Dijkstra(self,vertex):
+        """
+        狄克斯特拉算法：带权的单源最短路径算法
+        基本思想是:G(V,E)为一个带权有向图，把图中顶点集合分成两组
+        第一组为已求出最短路径的顶点集合，初始时只有源节点，以后每求出一条最短路径，将该节点加入到集合中
+        第二组是其余未求出最短路径的顶点集合，按最短路径长度增次序依次将顶点加入到第一组当中去。
+        """
+        for i in range(self.Nv):
+            # 初始化顶点的路径，如果是初始节点的邻接节点，则设置对应的路径为初始节点，反之为-1
+            self.dist[i] = self.Glist[vertex][i]
+            if self.dist[i] < 65535:
+                self.path[i] = vertex
+            else:
+                self.path[i] = -1
+        #初始节点对应的距离为0
+        self.dist[vertex] = 0
+        # 把初始节点收入到集合中
+        self.collected[vertex] = True
+
+        while True:
+            # 从未被收入集合的顶点中找到最小dist点
+            V = self.findmindist()
+            # 如果不存在，跳出算法
+            if not V:
+                break
+            # 将该节点收入集合
+            self.collected[V] = True
+            # 遍历每个顶点，更新距离和路径
+            for i in range(self.Nv):
+                # 如果连个节点是邻接点且未被收录
+                if not self.collected[i] and self.Glist[V][i] < 65535:
+                    # 如果有负边，该算法无法解决，返回false
+                    if self.Glist[V][i] < 0:
+                        return False
+                    # 如果收录该节点使得最小距离变小，更新最小距离和路径
+                    if self.dist[V]+self.Glist[V][i] < self.dist[i]:
+                        self.dist[i] = self.dist[V] + self.Glist[V][i]
+                        self.path[i] = V
+
+        return True
+
+    def findmindist2(self):
+        Mindist = 65535
+        for V in range(self.Nv):
+            # 未被收录且到生成树的距离更小的顶点
+            if self.dist[V] != 0 and self.dist[V] < Mindist:
+                Mindist = self.dist[V]
+                MinV = V
+
+        if Mindist < 65535:
+            return MinV
+        else:
+            return None
+
+
+    def prim(self):
+        """
+        无向有权图生成最小生成树的算法
+        """
+        # 初始化所有顶点和初始节点的距离
+        for i in range(self.Nv):
+            self.dist[i] = self.Glist[0][i]
+            #dist数组记录的所有顶点到生成树的最短距离，如果不是生成树的邻间节点，则表示距离为65535
+        # 生成树的总权重
+        TotalWeight = 0
+        # 生成树的收录节点数
+        VCount = 0
+        # 将初始节点收录到生成树当中
+        self.dist[0] = 0
+        VCount += 1
+        self.parent[0] = -1
+
+        while True:
+            V = self.findmindist2()
+            if not V:
+                break
+            # 生成边，插入到MST
+            edge = Edge(self.parent[V], V,self.dist[V])
+            self.MST.insertedge(edge)
+            TotalWeight += self.dist[V]
+            self.dist[V] = 0
+            VCount += 1
+            # 更新未被收录的节点到生成树的距离及父节点
+            for W in range(self.Nv):
+                if self.dist[W] != 0 and self.Glist[V][W] < 65535:
+                    if self.Glist[V][W] < self.dist[W]:
+                        self.dist[W] = self.Glist[V][W]
+                        self.parent[W] = V
+        if VCount < self.Nv:
+            TotalWeight  = None
+
+        return TotalWeight
+
+
+
+
+
 
 class AdjVNode:
     """
@@ -302,6 +443,8 @@ class LGraph:
         self.Glist = [Vnote(i) for i in range(VertexNum)]
         self.data = []
         self.visited = [False for i in range(VertexNum)]
+        self.path = [-1 for i in range(VertexNum)]
+        self.dist = [-1 for i in range(VertexNum)]
 
     def insertedge(self, edge):
         # 有向图插入新的邻接点
@@ -312,9 +455,9 @@ class LGraph:
         self.Glist[edge.V1].next = Node
 
         # 无向图插入邻接点
-        Node = AdjVNode(edge.V1, edge.weight)
-        Node.next = self.Glist[edge.V2].next
-        self.Glist[edge.V2].next = Node
+        #Node = AdjVNode(edge.V1, edge.weight)
+        #Node.next = self.Glist[edge.V2].next
+        #self.Glist[edge.V2].next = Node
 
     def buildgraph(self):
         self.Ne = int(input("输入图的边个数:"))
@@ -342,12 +485,44 @@ class LGraph:
             if not self.visited[Node.AdjV]:
                 self.DFS(Node.AdjV)
             Node = Node.next
+    def DFS2(self,vertex):
+        Q = Qnode(self.Nv)
+        self.visit(vertex)
+        self.visited[vertex] = True
+        Q.addq(vertex)
+        while not Q.is_empty():
+            V = Q.deleteq()
+            node = self.Glist[vertex].next
+            while node:
+                if not self.visited[node.AdjV]:
+                    self.visit(node.AdjV)
+                    self.visited[node.AdjV]
+                    Q.addq(node.AdjV)
+                node = node.next
+
+
+
+    def unweighted(self,vertex):
+        Q = Qnode(self.Nv)
+        self.dist[vertex] = 0
+        Q.addq(vertex)
+        while not Q.is_empty():
+            V = Q.deleteq()
+            node = self.Glist[V].next
+            while node:
+                if self.dist[node.AdjV] == -1:
+                    self.dist[node.AdjV] = self.dist[V] + 1
+                    self.path[node.AdjV] = V
+                    Q.addq(node.AdjV)
+                node = node.next
+
+
 
 
 if __name__ == '__main__':
-    graph = Graph(4)
+    graph = Graph(5)
     graph.buildgraph()
-    graph.BFS(0)
+    #graph.unweighted(0)
 
 
 
